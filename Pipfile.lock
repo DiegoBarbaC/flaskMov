@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "3e7baee94b90e2eeb3f7f702ac3de7111780139f62ed3e859fd792fbfdb48042"
+            "sha256": "a259b87802a665c901bb7c20900eee964f0ae3cb04c3fe961aa2f269a86e6685"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -204,6 +204,15 @@
             ],
             "markers": "python_version >= '3.7'",
             "version": "==2.1.5"
+        },
+        "mongoengine": {
+            "hashes": [
+                "sha256:1bd91649f62b66d0aaa11eac889618ee8ea4d8408f04c23ddc49b0469c2e1c9f",
+                "sha256:fcf2065153e07ec2488556c51d801938720c6bfaa73a13b41789470a877af852"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '3.7'",
+            "version": "==0.29.0"
         },
         "pyjwt": {
             "hashes": [
