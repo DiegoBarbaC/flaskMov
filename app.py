@@ -186,6 +186,77 @@ def update_car(car_id):
         return jsonify({"msg": "Error al actualizar el coche"}), 400
 
 
+#Endpoint para crear ride
+@app.route('/create_ride', methods=['POST'])
+@jwt_required()
+def create_ride():
+    data = request.get_json()
+
+    pasajero_id = data.get('pasajero_id')  # ID del usuario pasajero
+    conductor_id = data.get('conductor_id')  # ID del usuario conductor
+    destino = data.get('destino')
+    origen = data.get('origen')
+    coords_origen = data.get('coords_origen')  # Diccionario con {lat, long}
+    coords_destino = data.get('coords_destino')  # Diccionario con {lat, long}
+    hora_inicio = data.get('hora_inicio')  # Formato de fecha/hora
+    coche_id = data.get('coche_id')
+
+    # Verificar que el pasajero, conductor y coche existan
+    pasajero = mongo.db.users.find_one({"_id": ObjectId(pasajero_id)})
+    conductor = mongo.db.users.find_one({"_id": ObjectId(conductor_id)})
+    coche = mongo.db.cars.find_one({"_id": ObjectId(coche_id)})
+
+    if not pasajero or not conductor or not coche:
+        return jsonify({"msg": "Pasajero, conductor o coche no encontrados"}), 404
+
+    # Crear el viaje
+    nuevo_viaje = {
+        "pasajero_id": ObjectId(pasajero_id),
+        "conductor_id": ObjectId(conductor_id),
+        "destino": destino,
+        "origen": origen,
+        "coords_origen": coords_origen,
+        "coords_destino": coords_destino,
+        "hora_inicio": hora_inicio,
+        "coche_id": ObjectId(coche_id)
+    }
+
+    result = mongo.db.rides.insert_one(nuevo_viaje)
+    if result.acknowledged:
+        return jsonify({"msg": "Viaje creado correctamente", "ride_id": str(result.inserted_id)}), 201
+    else:
+        return jsonify({"msg": "Error al crear viaje"}), 400
+
+#Endpoint para ver todos los viajes de un usuario
+@app.route('/get_user_rides', methods=['GET'])
+@jwt_required()
+def get_user_rides():
+    # Obtener el ID del usuario del token JWT
+    user_id = get_jwt_identity()
+
+    # Buscar viajes donde el usuario es el pasajero o el conductor
+    rides = mongo.db.rides.find({
+        "$or": [
+            {"pasajero_id": ObjectId(user_id)},
+            {"conductor_id": ObjectId(user_id)}
+        ]
+    })
+
+    # Convertir los resultados a una lista de diccionarios
+    ride_list = []
+    for ride in rides:
+        ride['_id'] = str(ride['_id'])  # Convertir el ObjectId a string
+        ride['pasajero_id'] = str(ride['pasajero_id'])
+        ride['conductor_id'] = str(ride['conductor_id'])
+        ride['coche_id'] = str(ride['coche_id'])
+        ride_list.append(ride)
+
+    # Devolver la lista de viajes en formato JSON
+    return jsonify(ride_list), 200
+
+
+
+
 
 
 
