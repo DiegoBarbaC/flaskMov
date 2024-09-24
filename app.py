@@ -7,6 +7,7 @@ from bson.json_util import ObjectId
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import get_jwt_identity
 from bson import ObjectId
+from datetime import timedelta
 
 
 
@@ -54,7 +55,9 @@ def login():
     user = mongo.db.users.find_one({"email":email})
 
     if user and bcrypt.check_password_hash(user['password'], password):
-        access_token = create_access_token(identity=str(user["_id"]))
+        expires = timedelta(days=1)
+        access_token = create_access_token(identity=str(user["_id"]), expires_delta=expires)
+        
         return jsonify(access_token=access_token),200
     else:
         return jsonify({"msg":"Credenciales incorrectas"}), 401
