@@ -254,6 +254,74 @@ def get_user_rides():
     # Devolver la lista de viajes en formato JSON
     return jsonify(ride_list), 200
 
+#Endpoint para actualizar ride
+@app.route('/update_ride/<ride_id>', methods=['PUT'])
+@jwt_required()
+def update_ride(ride_id):
+    # Obtener los datos enviados en la solicitud
+    data = request.get_json()
+
+    # Verificar si el viaje existe
+    ride = mongo.db.rides.find_one({"_id": ObjectId(ride_id)})
+    if not ride:
+        return jsonify({"msg": "Ride no encontrado"}), 404
+
+    # Actualizar los campos permitidos si están presentes en el body del request
+    update_fields = {}
+
+    if 'pasajero_id' in data:
+        update_fields['pasajero_id'] = ObjectId(data['pasajero_id'])
+    if 'conductor_id' in data:
+        update_fields['conductor_id'] = ObjectId(data['conductor_id'])
+    if 'destino' in data:
+        update_fields['destino'] = data['destino']
+    if 'origen' in data:
+        update_fields['origen'] = data['origen']
+    if 'coords_origen' in data:
+        update_fields['coords_origen'] = data['coords_origen']
+    if 'coords_destino' in data:
+        update_fields['coords_destino'] = data['coords_destino']
+    if 'hora_inicio' in data:
+        update_fields['hora_inicio'] = data['hora_inicio']
+    if 'coche_id' in data:
+        update_fields['coche_id'] = ObjectId(data['coche_id'])
+
+    # Si no hay campos para actualizar, devolver error
+    if not update_fields:
+        return jsonify({"msg": "No se proporcionaron campos válidos para actualizar"}), 400
+
+    # Realizar la actualización en la base de datos
+    result = mongo.db.rides.update_one(
+        {"_id": ObjectId(ride_id)},
+        {"$set": update_fields}
+    )
+
+    # Verificar si se realizó la actualización
+    if result.modified_count > 0:
+        return jsonify({"msg": "Ride actualizado correctamente"}), 200
+    else:
+        return jsonify({"msg": "No se pudo actualizar el ride"}), 400
+
+
+#Endpoint para eliminar/cancelar ride
+@app.route('/delete_ride/<ride_id>', methods=['DELETE'])
+@jwt_required()
+def delete_ride(ride_id):
+    # Verificar si el viaje existe
+    ride = mongo.db.rides.find_one({"_id": ObjectId(ride_id)})
+    if not ride:
+        return jsonify({"msg": "Ride no encontrado"}), 404
+
+    # Eliminar el ride de la base de datos
+    result = mongo.db.rides.delete_one({"_id": ObjectId(ride_id)})
+
+    # Verificar si se eliminó correctamente
+    if result.deleted_count > 0:
+        return jsonify({"msg": "Ride eliminado correctamente"}), 200
+    else:
+        return jsonify({"msg": "No se pudo eliminar el ride"}), 400
+
+
 
 
 
