@@ -45,7 +45,46 @@ def register():
     else:
         return jsonify({"msg": "Hubo un error, no se pudieron guardar los datos"}),400
     
-    #Definir ruta login
+
+# Endpoint para actualizar la información del usuario
+@app.route('/update_profile', methods=['PUT'])
+@jwt_required()
+def update_profile():
+    # Obtener el ID del usuario del token JWT
+    user_id = get_jwt_identity()
+
+    # Obtener los datos enviados en la solicitud
+    data = request.get_json()
+    username = data.get('username')
+    
+    password = data.get('password')
+
+    # Crear un diccionario para almacenar los campos a actualizar
+    update_data = {}
+
+    # Verificar si se proporcionaron campos para actualizar
+    if username:
+        update_data['username'] = username
+    
+    if password:
+        # Si se proporciona una nueva contraseña, se debe hashear
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
+        update_data['password'] = hashed_password
+
+    # Si no hay datos para actualizar, devolver un error
+    if not update_data:
+        return jsonify({"msg": "No se proporcionaron datos para actualizar"}), 400
+
+    # Actualizar la información del usuario en la base de datos
+    result = mongo.db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
+
+    # Verificar si se realizó la actualización
+    if result.modified_count > 0:
+        return jsonify({"msg": "Perfil actualizado correctamente"}), 200
+    else:
+        return jsonify({"msg": "No se pudo actualizar el perfil"}), 400
+
+#Definir ruta login
 @app.route('/login', methods=['POST'])
 def login():
     data= request.get_json()
@@ -323,6 +362,33 @@ def delete_ride(ride_id):
         return jsonify({"msg": "Ride eliminado correctamente"}), 200
     else:
         return jsonify({"msg": "No se pudo eliminar el ride"}), 400
+    
+
+# Endpoint para obtener detalles de un viaje específico
+@app.route('/ride/<ride_id>', methods=['GET'])
+@jwt_required()
+def get_ride_details(ride_id):
+    # Obtener el ID del usuario del token JWT
+    user_id = get_jwt_identity()
+
+    # Buscar el viaje por ID
+    ride = mongo.db.rides.find_one({"_id": ObjectId(ride_id)})
+
+    if not ride:
+        return jsonify({"msg": "Ride no encontrado"}), 404
+
+    # Verificar si el usuario es el pasajero o el conductor del viaje
+    if ride['pasajero_id'] != ObjectId(user_id) and ride['conductor_id'] != ObjectId(user_id):
+        return jsonify({"msg": "No tienes permiso para ver este viaje"}), 403
+
+    # Convertir el ObjectId a string para la respuesta
+    ride['_id'] = str(ride['_id'])
+    ride['pasajero_id'] = str(ride['pasajero_id'])
+    ride['conductor_id'] = str(ride['conductor_id'])
+    ride['coche_id'] = str(ride['coche_id'])
+
+    return jsonify(ride), 200
+
 
 
 
