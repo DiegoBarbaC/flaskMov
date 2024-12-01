@@ -393,51 +393,76 @@ def get_ride_details(ride_id):
 @app.route('/ride_request', methods=['POST'])
 @jwt_required()
 def create_ride_request():
-    data = request.get_json()
-    pasajero_id = get_jwt_identity()  # Obtenemos el ID del pasajero del token
-    origen = data.get('origen')
-    destino = data.get('destino')
-    
-    # Coordenadas por default (UNAM)
-    coords_origen_default = {
-        "lat": 19.3321,
-        "lng": -99.1870
-    }
+    try:
+        data = request.get_json()
+        pasajero_id = get_jwt_identity()  # Obtenemos el ID del pasajero del token
+        
+        if not data or 'origen' not in data or 'destino' not in data:
+            return jsonify({"msg": "Faltan datos requeridos"}), 400
 
-    # Crear la solicitud de viaje
-    nueva_solicitud = {
-        "pasajero_id": ObjectId(pasajero_id),
-        "origen": origen,
-        "destino": destino,
-        "coords_origen": coords_origen_default,
-        "fecha_solicitud": datetime.utcnow()
-    }
+        # Coordenadas por default (UNAM)
+        coords_origen_default = {
+            "lat": 19.3321,
+            "lng": -99.1870
+        }
 
-    result = mongo.db.ride_requests.insert_one(nueva_solicitud)
-    if result.acknowledged:
-        return jsonify({
-            "msg": "Solicitud creada correctamente",
-            "request_id": str(result.inserted_id)
-        }), 201
-    else:
-        return jsonify({"msg": "Error al crear la solicitud"}), 400
+        # Crear la solicitud de viaje
+        nueva_solicitud = {
+            "pasajero_id": ObjectId(pasajero_id),
+            "origen": data['origen'],
+            "destino": data['destino'],
+            "coords_origen": coords_origen_default,
+            "fecha_solicitud": datetime.utcnow()
+        }
+
+        result = mongo.db.ride_requests.insert_one(nueva_solicitud)
+        
+        if result.acknowledged:
+            return jsonify({
+                "msg": "Solicitud creada correctamente",
+                "request_id": str(result.inserted_id)
+            }), 201
+        else:
+            return jsonify({"msg": "Error al crear la solicitud"}), 500
+            
+    except Exception as e:
+        print(f"Error en create_ride_request: {str(e)}")  # Para debugging
+        return jsonify({"msg": "Error interno del servidor"}), 500
 
 @app.route('/ride_requests', methods=['GET'])
 @jwt_required()
 def get_ride_requests():
-    # Obtener todas las solicitudes pendientes
-    solicitudes = mongo.db.ride_requests.find()
-    
-    # Convertir los resultados a una lista de diccionarios
-    solicitudes_list = []
-    for solicitud in solicitudes:
-        solicitud['_id'] = str(solicitud['_id'])
-        solicitud['pasajero_id'] = str(solicitud['pasajero_id'])
-        solicitud['fecha_solicitud'] = solicitud['fecha_solicitud'].isoformat()
-        solicitudes_list.append(solicitud)
+    try:
+        # Obtener el ID del usuario actual del token
+        current_user_id = get_jwt_identity()
+        
+        # Buscar todas las solicitudes excepto las del usuario actual
+        solicitudes = list(mongo.db.ride_requests.find({
+            "pasajero_id": {"$ne": ObjectId(current_user_id)}
+        }))
+        
+        # Convertir los resultados a una lista de diccionarios
+        solicitudes_list = []
+        for solicitud in solicitudes:
+            # Obtener información del pasajero
+            pasajero = mongo.db.users.find_one({"_id": solicitud['pasajero_id']})
+            
+            solicitud_formatted = {
+                '_id': str(solicitud['_id']),
+                'pasajero_id': str(solicitud['pasajero_id']),
+                'origen': solicitud['origen'],
+                'destino': solicitud['destino'],
+                'coords_origen': solicitud['coords_origen'],
+                'fecha_solicitud': solicitud['fecha_solicitud'].isoformat(),
+                # Agregar nombre del pasajero pero no información sensible
+                'pasajero_nombre': pasajero.get('username') if pasajero else 'Usuario'
+            }
+            solicitudes_list.append(solicitud_formatted)
 
-    return jsonify(solicitudes_list), 200
-
+        return jsonify(solicitudes_list), 200
+    except Exception as e:
+        print(f"Error en get_ride_requests: {str(e)}")
+        return jsonify({"msg": "Error al obtener las solicitudes"}), 500
 
 
 
