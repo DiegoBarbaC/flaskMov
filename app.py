@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from model import mongo, init_db
@@ -7,7 +6,7 @@ from bson.json_util import ObjectId
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import get_jwt_identity
 from bson import ObjectId
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 
 
@@ -391,11 +390,53 @@ def get_ride_details(ride_id):
 
 
 
+@app.route('/ride_request', methods=['POST'])
+@jwt_required()
+def create_ride_request():
+    data = request.get_json()
+    pasajero_id = get_jwt_identity()  # Obtenemos el ID del pasajero del token
+    origen = data.get('origen')
+    destino = data.get('destino')
+    
+    # Coordenadas por default (UNAM)
+    coords_origen_default = {
+        "lat": 19.3321,
+        "lng": -99.1870
+    }
 
+    # Crear la solicitud de viaje
+    nueva_solicitud = {
+        "pasajero_id": ObjectId(pasajero_id),
+        "origen": origen,
+        "destino": destino,
+        "coords_origen": coords_origen_default,
+        "fecha_solicitud": datetime.utcnow()
+    }
 
+    result = mongo.db.ride_requests.insert_one(nueva_solicitud)
+    if result.acknowledged:
+        return jsonify({
+            "msg": "Solicitud creada correctamente",
+            "request_id": str(result.inserted_id)
+        }), 201
+    else:
+        return jsonify({"msg": "Error al crear la solicitud"}), 400
 
+@app.route('/ride_requests', methods=['GET'])
+@jwt_required()
+def get_ride_requests():
+    # Obtener todas las solicitudes pendientes
+    solicitudes = mongo.db.ride_requests.find()
+    
+    # Convertir los resultados a una lista de diccionarios
+    solicitudes_list = []
+    for solicitud in solicitudes:
+        solicitud['_id'] = str(solicitud['_id'])
+        solicitud['pasajero_id'] = str(solicitud['pasajero_id'])
+        solicitud['fecha_solicitud'] = solicitud['fecha_solicitud'].isoformat()
+        solicitudes_list.append(solicitud)
 
-
+    return jsonify(solicitudes_list), 200
 
 
 
@@ -412,3 +453,4 @@ def get_ride_details(ride_id):
 # el servidor cuando se realizan cambios en el código. (SERIA COMO EL NODEMON)
 if __name__ == '__main__':
     app.run(debug=True)
+```
