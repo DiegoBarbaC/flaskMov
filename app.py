@@ -453,4 +453,3 @@ def get_ride_requests():
 # el servidor cuando se realizan cambios en el código. (SERIA COMO EL NODEMON)
 if __name__ == '__main__':
     app.run(debug=True)
-```
