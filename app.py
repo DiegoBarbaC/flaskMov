@@ -263,7 +263,25 @@ def create_ride():
 
     result = mongo.db.rides.insert_one(nuevo_viaje)
     if result.acknowledged:
+        ride_created = mongo.db.rides.find_one({"_id": result.inserted_id})
         return jsonify({"msg": "Viaje solicitado correctamente, espera a que sea aceptado"}), 201
+        # Convertir ObjectId a string para la respuesta JSON
+        ride_response = {
+            "id": str(ride_created["_id"]),
+            "pasajero_id": str(ride_created["pasajero_id"]),
+            "conductor_id": str(ride_created["conductor_id"]) if ride_created.get("conductor_id") else None,
+            "destino": ride_created["destino"],
+            "origen": ride_created["origen"],
+            "coords_origen": ride_created.get("coords_origen"),
+            "coords_destino": ride_created.get("coords_destino"),
+            "hora_inicio": ride_created["hora_inicio"],
+            "estado": ride_created["estado"],
+            "fecha_creacion": ride_created["fecha_creacion"].isoformat()
+        }
+        return jsonify({
+            "msg": "Viaje solicitado correctamente",
+            "ride": ride_response
+        }), 201
     else:
         return jsonify({"msg": "Error al crear viaje"}), 400
 
