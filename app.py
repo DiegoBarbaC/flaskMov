@@ -232,13 +232,15 @@ def update_car(car_id):
 @jwt_required()
 def create_ride():
     data = request.get_json()
+    # Obtener el ID del usuario del token JWT
+    user_id = ObjectId(get_jwt_identity())
     # Validar campos requeridos
-    required_fields = ['pasajero_id', 'origen', 'destino', 'hora_inicio']
+    required_fields = ['origen', 'destino', 'hora_inicio']
     for field in required_fields:
         if not data.get(field):
             return jsonify({"msg": f"El campo {field} es requerido"}), 400
 
-    pasajero_id = data.get('pasajero_id')  # ID del usuario pasajero
+    pasajero_id = user_id  # ID del usuario pasajero
     conductor_id = data.get('conductor_id')  # ID del usuario conductor
     destino = data.get('destino')
     origen = data.get('origen')
