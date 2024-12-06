@@ -379,47 +379,58 @@ def get_available_rides():
     try:
         # Obtener el ID del usuario actual
         current_user_id = get_jwt_identity()
+        print("Buscando viajes disponibles. Usuario actual:", current_user_id)
 
         # Buscar viajes sin conductor asignado y que no sean del usuario actual
-        rides = mongo.db.rides.find({
+        query = {
             "conductor_id": None,
             "pasajero_id": {"$ne": ObjectId(current_user_id)},
             "estado": "pendiente"
-        }).sort("hora_inicio", 1)  # Ordenar por hora de inicio, más próximos primero
+        }
+        print("Query de búsqueda:", query)
+
+        rides = mongo.db.rides.find(query).sort("hora_inicio", 1)
+        print("Búsqueda de viajes completada")
 
         ride_list = []
         for ride in rides:
-            # Obtener información del pasajero
-            pasajero = mongo.db.users.find_one({"_id": ride['pasajero_id']})
-            
-            ride_detail = {
-                'id': str(ride['_id']),
-                'pasajero_id': str(ride['pasajero_id']),
-                'origen': ride['origen'],
-                'destino': ride['destino'],
-                'coords_origen': ride.get('coords_origen'),
-                'coords_destino': ride.get('coords_destino'),
-                'hora_inicio': ride['hora_inicio'],
-                'estado': ride.get('estado', 'pendiente'),
-                'pasajero': {
-                    'id': str(pasajero['_id']),
-                    'email': pasajero['email'],
-                    'nombre': pasajero.get('nombre', 'Usuario')
-                } if pasajero else None
-            }
-            print("Ride procesado:", ride_detail)
-            ride_list.append(ride_detail)
-            
-            response_data = {
+            try:
+                print("Procesando ride:", str(ride['_id']))
+                # Obtener información del pasajero
+                pasajero = mongo.db.users.find_one({"_id": ride['pasajero_id']})
+                print("Información del pasajero encontrada:", pasajero is not None)
+                
+                ride_detail = {
+                    '_id': str(ride['_id']),
+                    'pasajero_id': str(ride['pasajero_id']),
+                    'origen': ride['origen'],
+                    'destino': ride['destino'],
+                    'coords_origen': ride.get('coords_origen'),
+                    'coords_destino': ride.get('coords_destino'),
+                    'hora_inicio': ride['hora_inicio'],
+                    'estado': ride.get('estado', 'pendiente'),
+                    'pasajero': {
+                        'id': str(pasajero['_id']),
+                        'email': pasajero['email'],
+                        'nombre': pasajero.get('nombre', 'Usuario')
+                    } if pasajero else None
+                }
+                print("Ride procesado exitosamente:", ride_detail)
+                ride_list.append(ride_detail)
+            except Exception as ride_error:
+                print(f"Error procesando ride {str(ride.get('_id', 'unknown'))}: {str(ride_error)}")
+                continue
+
+        response_data = {
             "success": True,
             "rides": ride_list
         }
-        print("Enviando respuesta:", response_data)
+        print("Enviando respuesta final:", response_data)
         return jsonify(response_data), 200
 
-        
-
     except Exception as e:
+        error_msg = f"Error en get_available_rides: {str(e)}"
+        print(error_msg)
         return jsonify({
             "success": False,
             "msg": "Error al obtener los viajes disponibles",
