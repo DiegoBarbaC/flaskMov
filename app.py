@@ -232,6 +232,11 @@ def update_car(car_id):
 @jwt_required()
 def create_ride():
     data = request.get_json()
+    # Validar campos requeridos
+    required_fields = ['pasajero_id', 'origen', 'destino', 'hora_inicio']
+    for field in required_fields:
+        if not data.get(field):
+            return jsonify({"msg": f"El campo {field} es requerido"}), 400
 
     pasajero_id = data.get('pasajero_id')  # ID del usuario pasajero
     conductor_id = data.get('conductor_id')  # ID del usuario conductor
@@ -242,29 +247,21 @@ def create_ride():
     hora_inicio = data.get('hora_inicio')  # Formato de fecha/hora
     coche_id = data.get('coche_id')
 
-    # Verificar que el pasajero, conductor y coche existan
-    pasajero = mongo.db.users.find_one({"_id": ObjectId(pasajero_id)})
-    conductor = mongo.db.users.find_one({"_id": ObjectId(conductor_id)})
-    coche = mongo.db.cars.find_one({"_id": ObjectId(coche_id)})
-
-    if not pasajero or not conductor or not coche:
-        return jsonify({"msg": "Pasajero, conductor o coche no encontrados"}), 404
-
     # Crear el viaje
     nuevo_viaje = {
         "pasajero_id": ObjectId(pasajero_id),
-        "conductor_id": ObjectId(conductor_id),
+        "conductor_id": ObjectId(conductor_id) if conductor_id else None,
         "destino": destino,
         "origen": origen,
-        "coords_origen": coords_origen,
-        "coords_destino": coords_destino,
+        "coords_origen": coords_origen if coords_origen else None,
+        "coords_destino": coords_destino if coords_destino else None,
         "hora_inicio": hora_inicio,
-        "coche_id": ObjectId(coche_id)
+        "coche_id": ObjectId(coche_id) if coche_id else None
     }
 
     result = mongo.db.rides.insert_one(nuevo_viaje)
     if result.acknowledged:
-        return jsonify({"msg": "Viaje creado correctamente", "ride_id": str(result.inserted_id)}), 201
+        return jsonify({"msg": "Viaje solicitado correctamente, espera a que sea aceptado"}), 201
     else:
         return jsonify({"msg": "Error al crear viaje"}), 400
 
@@ -275,73 +272,109 @@ def get_user_rides():
     # Obtener el ID del usuario del token JWT
     user_id = get_jwt_identity()
 
-    # Buscar viajes donde el usuario es el pasajero o el conductor
-    rides = mongo.db.rides.find({
-        "$or": [
-            {"pasajero_id": ObjectId(user_id)},
-            {"conductor_id": ObjectId(user_id)}
-        ]
-    })
+    try:
+        # Buscar viajes donde el usuario es el pasajero o el conductor
+        rides = mongo.db.rides.find({
+            "$or": [
+                {"pasajero_id": ObjectId(user_id)},
+                {"conductor_id": ObjectId(user_id)}
+            ]
+        }).sort("hora_inicio", -1)  # Ordenar por hora de inicio, más recientes primero
 
-    # Convertir los resultados a una lista de diccionarios
-    ride_list = []
-    for ride in rides:
-        ride['_id'] = str(ride['_id'])  # Convertir el ObjectId a string
-        ride['pasajero_id'] = str(ride['pasajero_id'])
-        ride['conductor_id'] = str(ride['conductor_id'])
-        ride['coche_id'] = str(ride['coche_id'])
-        ride_list.append(ride)
+        # Convertir los resultados a una lista de diccionarios
+        ride_list = []
+        for ride in rides:
+            # Obtener información del pasajero
+            pasajero = mongo.db.users.find_one({"_id": ride['pasajero_id']})
+            pasajero_info = {
+                "id": str(pasajero['_id']),
+                "email": pasajero['email']
+            } if pasajero else None
 
-    # Devolver la lista de viajes en formato JSON
-    return jsonify(ride_list), 200
+            # Obtener información del conductor si existe
+            conductor_info = None
+            if ride.get('conductor_id'):
+                conductor = mongo.db.users.find_one({"_id": ride['conductor_id']})
+                if conductor:
+                    conductor_info = {
+                        "id": str(conductor['_id']),
+                        "email": conductor['email']
+                    }
 
-#Endpoint para actualizar ride
-@app.route('/update_ride/<ride_id>', methods=['PUT'])
+            # Construir el objeto de ride con información detallada
+            ride_detail = {
+                'id': str(ride['_id']),
+                'pasajero': pasajero_info,
+                'conductor': conductor_info,
+                'origen': ride['origen'],
+                'destino': ride['destino'],
+                'coords_origen': ride.get('coords_origen'),
+                'coords_destino': ride.get('coords_destino'),
+                'hora_inicio': ride['hora_inicio'],
+                'estado': ride.get('estado', 'pendiente'),
+                'coche_id': str(ride['coche_id']) if ride.get('coche_id') else None
+            }
+            ride_list.append(ride_detail)
+
+        return jsonify({
+            "success": True,
+            "rides": ride_list
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "msg": "Error al obtener los viajes",
+            "error": str(e)
+        }), 400
+
+#Endpoint para ver todos los viajes disponibles (sin conductor asignado)
+@app.route('/get_available_rides', methods=['GET'])
 @jwt_required()
-def update_ride(ride_id):
-    # Obtener los datos enviados en la solicitud
-    data = request.get_json()
+def get_available_rides():
+    try:
+        # Obtener el ID del usuario actual
+        current_user_id = get_jwt_identity()
 
-    # Verificar si el viaje existe
-    ride = mongo.db.rides.find_one({"_id": ObjectId(ride_id)})
-    if not ride:
-        return jsonify({"msg": "Ride no encontrado"}), 404
+        # Buscar viajes sin conductor asignado y que no sean del usuario actual
+        rides = mongo.db.rides.find({
+            "conductor_id": None,
+            "pasajero_id": {"$ne": ObjectId(current_user_id)},
+            "estado": "pendiente"
+        }).sort("hora_inicio", 1)  # Ordenar por hora de inicio, más próximos primero
 
-    # Actualizar los campos permitidos si están presentes en el body del request
-    update_fields = {}
+        ride_list = []
+        for ride in rides:
+            # Obtener información del pasajero
+            pasajero = mongo.db.users.find_one({"_id": ride['pasajero_id']})
+            pasajero_info = {
+                "id": str(pasajero['_id']),
+                "email": pasajero['email']
+            } if pasajero else None
 
-    if 'pasajero_id' in data:
-        update_fields['pasajero_id'] = ObjectId(data['pasajero_id'])
-    if 'conductor_id' in data:
-        update_fields['conductor_id'] = ObjectId(data['conductor_id'])
-    if 'destino' in data:
-        update_fields['destino'] = data['destino']
-    if 'origen' in data:
-        update_fields['origen'] = data['origen']
-    if 'coords_origen' in data:
-        update_fields['coords_origen'] = data['coords_origen']
-    if 'coords_destino' in data:
-        update_fields['coords_destino'] = data['coords_destino']
-    if 'hora_inicio' in data:
-        update_fields['hora_inicio'] = data['hora_inicio']
-    if 'coche_id' in data:
-        update_fields['coche_id'] = ObjectId(data['coche_id'])
+            ride_detail = {
+                'id': str(ride['_id']),
+                'pasajero': pasajero_info,
+                'origen': ride['origen'],
+                'destino': ride['destino'],
+                'coords_origen': ride.get('coords_origen'),
+                'coords_destino': ride.get('coords_destino'),
+                'hora_inicio': ride['hora_inicio'],
+                'estado': ride.get('estado', 'pendiente')
+            }
+            ride_list.append(ride_detail)
 
-    # Si no hay campos para actualizar, devolver error
-    if not update_fields:
-        return jsonify({"msg": "No se proporcionaron campos válidos para actualizar"}), 400
+        return jsonify({
+            "success": True,
+            "rides": ride_list
+        }), 200
 
-    # Realizar la actualización en la base de datos
-    result = mongo.db.rides.update_one(
-        {"_id": ObjectId(ride_id)},
-        {"$set": update_fields}
-    )
-
-    # Verificar si se realizó la actualización
-    if result.modified_count > 0:
-        return jsonify({"msg": "Ride actualizado correctamente"}), 200
-    else:
-        return jsonify({"msg": "No se pudo actualizar el ride"}), 400
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "msg": "Error al obtener los viajes disponibles",
+            "error": str(e)
+        }), 400
 
 
 #Endpoint para eliminar/cancelar ride
