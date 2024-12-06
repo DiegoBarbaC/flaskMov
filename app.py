@@ -391,27 +391,33 @@ def get_available_rides():
         for ride in rides:
             # Obtener información del pasajero
             pasajero = mongo.db.users.find_one({"_id": ride['pasajero_id']})
-            pasajero_info = {
-                "id": str(pasajero['_id']),
-                "email": pasajero['email']
-            } if pasajero else None
-
+            
             ride_detail = {
                 'id': str(ride['_id']),
-                'pasajero': pasajero_info,
+                'pasajero_id': str(ride['pasajero_id']),
                 'origen': ride['origen'],
                 'destino': ride['destino'],
                 'coords_origen': ride.get('coords_origen'),
                 'coords_destino': ride.get('coords_destino'),
                 'hora_inicio': ride['hora_inicio'],
-                'estado': ride.get('estado', 'pendiente')
+                'estado': ride.get('estado', 'pendiente'),
+                'pasajero': {
+                    'id': str(pasajero['_id']),
+                    'email': pasajero['email'],
+                    'nombre': pasajero.get('nombre', 'Usuario')
+                } if pasajero else None
             }
+            print("Ride procesado:", ride_detail)
             ride_list.append(ride_detail)
-
-        return jsonify({
+            
+            response_data = {
             "success": True,
             "rides": ride_list
-        }), 200
+        }
+        print("Enviando respuesta:", response_data)
+        return jsonify(response_data), 200
+
+        
 
     except Exception as e:
         return jsonify({
