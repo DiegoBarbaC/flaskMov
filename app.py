@@ -96,7 +96,7 @@ def login():
         expires = timedelta(days=1)
         access_token = create_access_token(identity=str(user["_id"]), expires_delta=expires)
         
-        return jsonify(access_token=access_token),200
+        return jsonify(accessToken=access_token),200
     else:
         return jsonify({"msg":"Credenciales incorrectas"}), 401
 #Endpoint protegido   
