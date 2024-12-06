@@ -283,6 +283,7 @@ def create_ride():
             
             # Convertir ObjectId a string para la respuesta JSON
             ride_response = {
+                "ride": {
                 "id": str(ride_created["_id"]),
                 "pasajero_id": str(ride_created["pasajero_id"]),
                 "conductor_id": str(ride_created["conductor_id"]) if ride_created.get("conductor_id") else None,
@@ -293,12 +294,10 @@ def create_ride():
                 "hora_inicio": ride_created["hora_inicio"],
                 "estado": ride_created.get("estado", "pendiente")
             }
+            }
             
             print("Respuesta preparada:", ride_response)
-            return jsonify({
-                "msg": "Viaje solicitado correctamente",
-                "ride": ride_response
-            }), 201
+            return jsonify(ride_response), 200
         else:
             print("Error: La inserción no fue reconocida")
             return jsonify({"msg": "Error al crear viaje"}), 400
