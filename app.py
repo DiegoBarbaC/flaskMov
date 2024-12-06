@@ -644,6 +644,44 @@ def accept_ride(ride_id):
 
 
 
+@app.route('/get_user_rides', methods=['GET'])
+@jwt_required()
+def get_user_rides():
+    try:
+        current_user = get_jwt_identity()
+        user = mongo.db.users.find_one({'_id': ObjectId(current_user)})
+        
+        if not user:
+            return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
+
+        # Buscar viajes donde el usuario es conductor o pasajero
+        rides = list(mongo.db.rides.find({
+            '$or': [
+                {'conductor._id': ObjectId(current_user)},
+                {'pasajero._id': ObjectId(current_user)}
+            ]
+        }))
+
+        # Convertir ObjectId a string para serialización JSON
+        for ride in rides:
+            ride['_id'] = str(ride['_id'])
+            if 'conductor' in ride and ride['conductor']:
+                ride['conductor']['_id'] = str(ride['conductor']['_id'])
+            if 'pasajero' in ride and ride['pasajero']:
+                ride['pasajero']['_id'] = str(ride['pasajero']['_id'])
+
+        return jsonify({
+            'success': True,
+            'rides': rides
+        })
+
+    except Exception as e:
+        print(f"Error al obtener viajes del usuario: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': 'Error al obtener los viajes'
+        }), 500
+
 # En Python, cada archivo tiene una variable especial llamada _name_.
 # Si el archivo se está ejecutando directamente (no importado como un módulo en otro archivo), 
 # _name_ se establece en '_main_'.
