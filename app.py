@@ -309,68 +309,6 @@ def create_ride():
         print("Traceback completo:", traceback.format_exc())
         return jsonify({"msg": "Error interno del servidor", "error": str(e)}), 500
 
-#Endpoint para ver todos los viajes de un usuario
-@app.route('/get_user_rides', methods=['GET'])
-@jwt_required()
-def get_user_rides():
-    # Obtener el ID del usuario del token JWT
-    user_id = get_jwt_identity()
-
-    try:
-        # Buscar viajes donde el usuario es el pasajero o el conductor
-        rides = mongo.db.rides.find({
-            "$or": [
-                {"pasajero_id": ObjectId(user_id)},
-                {"conductor_id": ObjectId(user_id)}
-            ]
-        }).sort("hora_inicio", -1)  # Ordenar por hora de inicio, más recientes primero
-
-        # Convertir los resultados a una lista de diccionarios
-        ride_list = []
-        for ride in rides:
-            # Obtener información del pasajero
-            pasajero = mongo.db.users.find_one({"_id": ride['pasajero_id']})
-            pasajero_info = {
-                "id": str(pasajero['_id']),
-                "email": pasajero['email']
-            } if pasajero else None
-
-            # Obtener información del conductor si existe
-            conductor_info = None
-            if ride.get('conductor_id'):
-                conductor = mongo.db.users.find_one({"_id": ride['conductor_id']})
-                if conductor:
-                    conductor_info = {
-                        "id": str(conductor['_id']),
-                        "email": conductor['email']
-                    }
-
-            # Construir el objeto de ride con información detallada
-            ride_detail = {
-                'id': str(ride['_id']),
-                'pasajero': pasajero_info,
-                'conductor': conductor_info,
-                'origen': ride['origen'],
-                'destino': ride['destino'],
-                'coords_origen': ride.get('coords_origen'),
-                'coords_destino': ride.get('coords_destino'),
-                'hora_inicio': ride['hora_inicio'],
-                'estado': ride.get('estado', 'pendiente'),
-                'coche_id': str(ride['coche_id']) if ride.get('coche_id') else None
-            }
-            ride_list.append(ride_detail)
-
-        return jsonify({
-            "success": True,
-            "rides": ride_list
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "msg": "Error al obtener los viajes",
-            "error": str(e)
-        }), 400
 
 #Endpoint para ver todos los viajes disponibles (sin conductor asignado)
 @app.route('/get_available_rides', methods=['GET'])
