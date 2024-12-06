@@ -231,59 +231,84 @@ def update_car(car_id):
 @app.route('/create_ride', methods=['POST'])
 @jwt_required()
 def create_ride():
-    data = request.get_json()
-    # Obtener el ID del usuario del token JWT
-    user_id = ObjectId(get_jwt_identity())
-    # Validar campos requeridos
-    required_fields = ['origen', 'destino', 'hora_inicio']
-    for field in required_fields:
-        if not data.get(field):
-            return jsonify({"msg": f"El campo {field} es requerido"}), 400
+    try:
+        print("Iniciando create_ride")
+        data = request.get_json()
+        user_id = get_jwt_identity()
+        
+        print("Datos recibidos:", data)
+        print("User ID:", user_id)
 
-    pasajero_id = user_id  # ID del usuario pasajero
-    conductor_id = data.get('conductor_id')  # ID del usuario conductor
-    destino = data.get('destino')
-    origen = data.get('origen')
-    coords_origen = data.get('coords_origen')  # Diccionario con {lat, long}
-    coords_destino = data.get('coords_destino')  # Diccionario con {lat, long}
-    hora_inicio = data.get('hora_inicio')  # Formato de fecha/hora
-    coche_id = data.get('coche_id')
+        # Validar campos requeridos
+        required_fields = ['destino', 'origen', 'hora_inicio']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"msg": f"El campo {field} es requerido"}), 400
 
-    # Crear el viaje
-    nuevo_viaje = {
-        "pasajero_id": ObjectId(pasajero_id),
-        "conductor_id": ObjectId(conductor_id) if conductor_id else None,
-        "destino": destino,
-        "origen": origen,
-        "coords_origen": coords_origen if coords_origen else None,
-        "coords_destino": coords_destino if coords_destino else None,
-        "hora_inicio": hora_inicio,
-        "coche_id": ObjectId(coche_id) if coche_id else None,
-        "estado": "pendiente"  # Estado inicial del viaje
-    }
+        pasajero_id = user_id  # ID del usuario pasajero
+        conductor_id = data.get('conductor_id')  # ID del usuario conductor
+        destino = data.get('destino')
+        origen = data.get('origen')
+        coords_origen = data.get('coords_origen')  # Diccionario con {lat, long}
+        coords_destino = data.get('coords_destino')  # Diccionario con {lat, long}
+        hora_inicio = data.get('hora_inicio')  # Formato de fecha/hora
+        coche_id = data.get('coche_id')
 
-    result = mongo.db.rides.insert_one(nuevo_viaje)
-    if result.acknowledged:
-        ride_created = mongo.db.rides.find_one({"_id": result.inserted_id})
-        # Convertir ObjectId a string para la respuesta JSON
-        ride_response = {
-            "id": str(ride_created["_id"]),
-            "pasajero_id": str(ride_created["pasajero_id"]),
-            "conductor_id": str(ride_created["conductor_id"]) if ride_created.get("conductor_id") else None,
-            "destino": ride_created["destino"],
-            "origen": ride_created["origen"],
-            "coords_origen": ride_created.get("coords_origen"),
-            "coords_destino": ride_created.get("coords_destino"),
-            "hora_inicio": ride_created["hora_inicio"],
-            "estado": ride_created["estado"],
-            "fecha_creacion": ride_created["fecha_creacion"].isoformat()
+        print("Creando nuevo_viaje con datos:")
+        print("pasajero_id:", pasajero_id)
+        print("conductor_id:", conductor_id)
+        print("destino:", destino)
+        print("origen:", origen)
+
+        # Crear el viaje
+        nuevo_viaje = {
+            "pasajero_id": ObjectId(pasajero_id),
+            "conductor_id": ObjectId(conductor_id) if conductor_id else None,
+            "destino": destino,
+            "origen": origen,
+            "coords_origen": coords_origen if coords_origen else None,
+            "coords_destino": coords_destino if coords_destino else None,
+            "hora_inicio": hora_inicio,
+            "estado": "pendiente",  # Estado inicial del viaje
+            "coche_id": ObjectId(coche_id) if coche_id else None
         }
-        return jsonify({
-            "msg": "Viaje solicitado correctamente",
-            "ride": ride_response
-        }), 201
-    else:
-        return jsonify({"msg": "Error al crear viaje"}), 400
+
+        print("Intentando insertar en la base de datos")
+        result = mongo.db.rides.insert_one(nuevo_viaje)
+        
+        if result.acknowledged:
+            print("Inserción exitosa, ID:", result.inserted_id)
+            ride_created = mongo.db.rides.find_one({"_id": result.inserted_id})
+            print("Viaje creado:", ride_created)
+            
+            # Convertir ObjectId a string para la respuesta JSON
+            ride_response = {
+                "id": str(ride_created["_id"]),
+                "pasajero_id": str(ride_created["pasajero_id"]),
+                "conductor_id": str(ride_created["conductor_id"]) if ride_created.get("conductor_id") else None,
+                "destino": ride_created["destino"],
+                "origen": ride_created["origen"],
+                "coords_origen": ride_created.get("coords_origen"),
+                "coords_destino": ride_created.get("coords_destino"),
+                "hora_inicio": ride_created["hora_inicio"],
+                "estado": ride_created.get("estado", "pendiente")
+            }
+            
+            print("Respuesta preparada:", ride_response)
+            return jsonify({
+                "msg": "Viaje solicitado correctamente",
+                "ride": ride_response
+            }), 201
+        else:
+            print("Error: La inserción no fue reconocida")
+            return jsonify({"msg": "Error al crear viaje"}), 400
+            
+    except Exception as e:
+        print("Error en create_ride:", str(e))
+        print("Tipo de error:", type(e))
+        import traceback
+        print("Traceback completo:", traceback.format_exc())
+        return jsonify({"msg": "Error interno del servidor", "error": str(e)}), 500
 
 #Endpoint para ver todos los viajes de un usuario
 @app.route('/get_user_rides', methods=['GET'])
