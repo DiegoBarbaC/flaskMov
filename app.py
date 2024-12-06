@@ -558,6 +558,89 @@ def get_ride_requests():
         print(f"Error en get_ride_requests: {str(e)}")
         return jsonify({"msg": "Error al obtener las solicitudes"}), 500
 
+# Endpoint para aceptar un viaje
+@app.route('/accept_ride/<ride_id>', methods=['POST'])
+@jwt_required()
+def accept_ride(ride_id):
+    try:
+        # Obtener el ID del conductor (usuario actual)
+        conductor_id = get_jwt_identity()
+        print(f"Conductor {conductor_id} intentando aceptar viaje {ride_id}")
+
+        # Verificar que el viaje existe y está disponible
+        ride = mongo.db.rides.find_one({
+            "_id": ObjectId(ride_id),
+            "conductor_id": None,
+            "estado": "pendiente"
+        })
+
+        if not ride:
+            print("Viaje no encontrado o no disponible")
+            return jsonify({
+                "success": False,
+                "msg": "El viaje no está disponible"
+            }), 404
+
+        # Actualizar el viaje con el conductor
+        result = mongo.db.rides.update_one(
+            {"_id": ObjectId(ride_id)},
+            {
+                "$set": {
+                    "conductor_id": ObjectId(conductor_id),
+                    "estado": "aceptado",
+                    "fecha_aceptacion": datetime.now()
+                }
+            }
+        )
+
+        if result.modified_count > 0:
+            # Obtener el viaje actualizado con información del conductor y pasajero
+            updated_ride = mongo.db.rides.find_one({"_id": ObjectId(ride_id)})
+            conductor = mongo.db.users.find_one({"_id": ObjectId(conductor_id)})
+            pasajero = mongo.db.users.find_one({"_id": updated_ride['pasajero_id']})
+
+            response_data = {
+                "success": True,
+                "msg": "Viaje aceptado exitosamente",
+                "ride": {
+                    "_id": str(updated_ride['_id']),
+                    "origen": updated_ride['origen'],
+                    "destino": updated_ride['destino'],
+                    "hora_inicio": updated_ride['hora_inicio'],
+                    "estado": updated_ride['estado'],
+                    "fecha_aceptacion": updated_ride.get('fecha_aceptacion'),
+                    "coords_origen": updated_ride.get('coords_origen'),
+                    "coords_destino": updated_ride.get('coords_destino'),
+                    "pasajero": {
+                        "id": str(pasajero['_id']),
+                        "nombre": pasajero.get('nombre', 'Usuario'),
+                        "email": pasajero['email']
+                    } if pasajero else None,
+                    "conductor": {
+                        "id": str(conductor['_id']),
+                        "nombre": conductor.get('nombre', 'Usuario'),
+                        "email": conductor['email']
+                    } if conductor else None
+                }
+            }
+            print("Viaje actualizado exitosamente:", response_data)
+            return jsonify(response_data), 200
+        else:
+            print("No se pudo actualizar el viaje")
+            return jsonify({
+                "success": False,
+                "msg": "No se pudo actualizar el viaje"
+            }), 400
+
+    except Exception as e:
+        error_msg = f"Error al aceptar viaje: {str(e)}"
+        print(error_msg)
+        return jsonify({
+            "success": False,
+            "msg": "Error al aceptar el viaje",
+            "error": str(e)
+        }), 400
+
 
 
 
