@@ -7,6 +7,7 @@ from flask_bcrypt import Bcrypt
 from flask_jwt_extended import get_jwt_identity
 from bson import ObjectId
 from datetime import timedelta, datetime
+import traceback
 
 
 
@@ -587,37 +588,65 @@ def accept_ride(ride_id):
 def get_user_rides():
     try:
         current_user = get_jwt_identity()
-        user = mongo.db.users.find_one({'_id': ObjectId(current_user)})
+        print(f"Buscando viajes para el usuario: {current_user}")
         
-        if not user:
-            return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
-
-        # Buscar viajes donde el usuario es conductor o pasajero
+        # Buscar viajes donde el usuario es el pasajero o el conductor
         rides = list(mongo.db.rides.find({
-            '$or': [
-                {'conductor._id': ObjectId(current_user)},
-                {'pasajero._id': ObjectId(current_user)}
+            "$or": [
+                {"pasajero_id": ObjectId(current_user)},
+                {"conductor_id": ObjectId(current_user)}
             ]
-        }))
+        }).sort("hora_inicio", -1))  # Ordenar por hora de inicio, más recientes primero
 
-        # Convertir ObjectId a string para serialización JSON
+        print(f"Viajes encontrados: {len(rides)}")
+        
+        # Convertir los resultados a una lista de diccionarios
+        ride_list = []
         for ride in rides:
-            ride['_id'] = str(ride['_id'])
-            if 'conductor' in ride and ride['conductor']:
-                ride['conductor']['_id'] = str(ride['conductor']['_id'])
-            if 'pasajero' in ride and ride['pasajero']:
-                ride['pasajero']['_id'] = str(ride['pasajero']['_id'])
+            # Convertir ObjectId a string para serialización JSON
+            ride_detail = {
+                'id': str(ride['_id']),
+                'origen': ride['origen'],
+                'destino': ride['destino'],
+                'hora_inicio': ride['hora_inicio'],
+                'estado': ride.get('estado', 'pendiente'),
+            }
 
+            # Obtener información del pasajero
+            if 'pasajero_id' in ride:
+                pasajero = mongo.db.users.find_one({"_id": ride['pasajero_id']})
+                if pasajero:
+                    ride_detail['pasajero'] = {
+                        "id": str(pasajero['_id']),
+                        "nombre": pasajero.get('nombre', ''),
+                        "email": pasajero['email']
+                    }
+
+            # Obtener información del conductor
+            if 'conductor_id' in ride:
+                conductor = mongo.db.users.find_one({"_id": ride['conductor_id']})
+                if conductor:
+                    ride_detail['conductor'] = {
+                        "id": str(conductor['_id']),
+                        "nombre": conductor.get('nombre', ''),
+                        "email": conductor['email']
+                    }
+
+            ride_list.append(ride_detail)
+
+        print(f"Detalles de viajes procesados: {len(ride_list)}")
         return jsonify({
-            'success': True,
-            'rides': rides
-        })
+            "success": True,
+            "rides": ride_list
+        }), 200
 
     except Exception as e:
-        print(f"Error al obtener viajes del usuario: {str(e)}")
+        print(f"Error en get_user_rides: {str(e)}")
+        print("Traceback:", traceback.format_exc())
         return jsonify({
-            'success': False,
-            'message': 'Error al obtener los viajes'
+            "success": False,
+            "message": "Error al obtener los viajes",
+            "error": str(e)
         }), 500
 
 # En Python, cada archivo tiene una variable especial llamada _name_.
